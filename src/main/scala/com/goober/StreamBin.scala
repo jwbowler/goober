@@ -89,7 +89,7 @@ object StreamBin {
 
     val msgStream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topicsSet)
 
-    val jsonStream = msgStream.map(pair => {
+    val normedStream = msgStream.map(pair => {
       val (_, str) = pair
       val json: JsValue = Json.parse(str)
 
@@ -114,7 +114,7 @@ object StreamBin {
       }
     })
 
-    val rideTableStream = jsonStream.updateStateByKey(rideTableUpdateFunction)
+    val rideTableStream = normedStream.updateStateByKey(rideTableUpdateFunction)
 
     val cleanRideTableStream = rideTableStream.filter(record => {
       val (uid, (loc, eta)) = record
