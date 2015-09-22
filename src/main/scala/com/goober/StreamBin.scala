@@ -102,7 +102,7 @@ object StreamBin {
       if (msgType.getOrElse("") == "TYPE1") {
         val loc = Some(locationToBucket(xLoc.get, yLoc.get))
 
-        (rid.get, (loc, eta))
+        (rid.get, (loc, None))
       }
 
       else if (msgType.getOrElse("") == "TYPE2") {
