@@ -10,7 +10,8 @@ libraryDependencies ++= Seq(
   "org.apache.spark" % "spark-streaming_2.10" % "1.4.0" % "provided",
   "org.apache.spark" % "spark-streaming-kafka_2.10" % "1.4.0",
   "net.debasishg" % "redisclient_2.10" % "3.0",
-  "com.tdunning" % "t-digest" % "3.1"
+  "com.tdunning" % "t-digest" % "3.1",
+  "com.typesafe.play" % "play-json_2.10" % "2.3.10"
 )
 
 assemblyMergeStrategy in assembly := {

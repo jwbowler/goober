@@ -2,9 +2,11 @@ import com.redis.RedisClient
 import com.tdunning.math.stats.{AVLTreeDigest, ArrayDigest}
 import kafka.serializer.StringDecoder
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.{Seconds, StreamingContext}
+import play.api.libs.json.{JsValue, Json}
 
 object StreamBin {
 
@@ -73,11 +75,13 @@ object StreamBin {
     Logger.getLogger("akka").setLevel(Level.WARN)
 
     val brokers = "ec2-52-88-49-174.us-west-2.compute.amazonaws.com:9092"
-    val topics = "m1"
+    val topics = "m2"
     val topicsSet = topics.split(",").toSet
 
     val conf = new SparkConf().setAppName("goober")
-    val ssc = new StreamingContext(conf, Seconds(1))
+    val sc = new SparkContext(conf)
+    val ssc = new StreamingContext(sc, Seconds(1))
+    val sqlc = new SQLContext(sc)
 
     ssc.checkpoint("/tmp")
 
@@ -85,30 +89,32 @@ object StreamBin {
 
     val msgStream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topicsSet)
 
-    val normedStream = msgStream.map[UserRecord](record => {
-      val (_, str) = record
-      val words = str.split(" ")
+    val jsonStream = msgStream.map(pair => {
+      val (_, str) = pair
+      val json: JsValue = Json.parse(str)
 
-      if (words(0) == "TYPE1") {
+      val msgType = (json \ "_type").asOpt[String]
+      val rid = (json \ "rideId").asOpt[Long]
+      val eta = (json \ "waitTime").asOpt[Eta]
+      val xLoc = (json \ "location" \ "x").asOpt[Double]
+      val yLoc = (json \ "location" \ "y").asOpt[Double]
 
-        val rid = words(1).toLong
-        val loc = Some(locationToBucket(words(3).toDouble, words(4).toDouble))
-        val eta = None
+      if (msgType.getOrElse("") == "TYPE1") {
+        val loc = Some(locationToBucket(xLoc.get, yLoc.get))
 
-        (rid, (loc, eta))
-
-      } else {
-
-        val rid = words(1).toLong
-        val loc = None
-        val eta = Some(words(2).toDouble)
-
-        (rid, (loc, eta))
+        (rid.get, (loc, eta))
       }
 
+      else if (msgType.getOrElse("") == "TYPE2") {
+        (rid.get, (None, eta))
+      }
+
+      else {
+        throw new RuntimeException()
+      }
     })
 
-    val rideTableStream = normedStream.updateStateByKey(rideTableUpdateFunction)
+    val rideTableStream = jsonStream.updateStateByKey(rideTableUpdateFunction)
 
     val cleanRideTableStream = rideTableStream.filter(record => {
       val (uid, (loc, eta)) = record
