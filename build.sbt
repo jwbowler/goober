@@ -8,7 +8,8 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "1.4.0" % "provided",
   "org.apache.spark" %% "spark-sql" % "1.4.0" % "provided",
   "org.apache.spark" % "spark-streaming_2.10" % "1.4.0" % "provided",
-  "org.apache.spark" % "spark-streaming-kafka_2.10" % "1.4.0"
+  "org.apache.spark" % "spark-streaming-kafka_2.10" % "1.4.0",
+  "net.debasishg" % "redisclient_2.10" % "3.0"
 )
 
 assemblyMergeStrategy in assembly := {
