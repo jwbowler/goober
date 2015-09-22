@@ -13,7 +13,7 @@ object StreamBin {
     Logger.getLogger("akka").setLevel(Level.WARN)
 
     val brokers = "ec2-52-88-49-174.us-west-2.compute.amazonaws.com:9092"
-    val topics = "my-topic"
+    val topics = "m1"
     val topicsSet = topics.split(",").toSet
 
     val conf = new SparkConf().setAppName("goober")
