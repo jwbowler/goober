@@ -1,4 +1,5 @@
 import com.redis.RedisClient
+import com.tdunning.math.stats.{AVLTreeDigest, ArrayDigest}
 import kafka.serializer.StringDecoder
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
@@ -119,15 +120,25 @@ object StreamBin {
       (loc.get, eta.get)
     }).groupByKey()
 
-    val avgStream = locTableStream.map[(Loc, Double)](pair => {
+//    val avgStream = locTableStream.map[(Loc, Double)](pair => {
+//      val (loc, etaList) = pair
+//      val avg = etaList.sum / etaList.size
+//      (loc, avg)
+//    })
+
+    val percentileStream = locTableStream.map[(Loc, Double)](pair => {
+      val tDigest = new AVLTreeDigest(100)
+
       val (loc, etaList) = pair
-      val avg = etaList.sum / etaList.size
-      (loc, avg)
+      etaList.foreach(tDigest.add(_, 1))
+      val q90 = tDigest.quantile(0.9)
+
+      (loc, q90)
     })
 
-    val outputStream = avgStream.map(pair => {
+    val outputStream = percentileStream.map(pair => {
       val (k, v) = pair
-      ("loc_" + k + "_avg", v)
+      ("loc_" + k + "_p90", v)
     })
 
     outputStream.foreachRDD(rdd => {
