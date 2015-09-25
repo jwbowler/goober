@@ -1,3 +1,6 @@
+import java.text.SimpleDateFormat
+
+import com.goober.Util._
 import com.redis.RedisClient
 import com.tdunning.math.stats.{AVLTreeDigest, ArrayDigest}
 import kafka.serializer.StringDecoder
@@ -10,34 +13,15 @@ import play.api.libs.json.{JsValue, Json}
 
 object StreamBin {
 
-  type Uid = Long
-  type Loc = Int
-  type Eta = Double
-
-  type LocEtaPair = (Option[Loc], Option[Eta])
-  type UserRecord = (Uid, LocEtaPair)
-  type UidEtaPair = (Uid, Eta)
-  type EtaList = Seq[Eta]
-
-  def locationToBucket(x: Double, y: Double): Int = {
-    val numBucketsX = 2
-    val numBucketsY = 2
-
-    val col = Math.floor(x * numBucketsX).toInt
-    val row = Math.floor(y * numBucketsY).toInt
-
-    col * numBucketsX + row
-  }
-
   def rideTableUpdateFunction(in: Seq[LocEtaPair], lastState: Option[LocEtaPair]): Option[LocEtaPair] = {
 
     in.foldLeft(lastState) {
       (state, newPair) => {
-        val (newLoc, newEta): LocEtaPair = newPair
+        val (newLoc, newEta, timestamp): LocEtaPair = newPair
 
         // ride is already in table
         if (state.isDefined) {
-          val (oldLoc, oldEta) = state.get
+          val (oldLoc, oldEta, timestamp) = state.get
 
           // handle pickup/cancel
           if (newLoc.isEmpty && newEta.isEmpty) {
@@ -48,7 +32,7 @@ object StreamBin {
           else {
             val loc = newLoc.orElse(oldLoc)
             val eta = newEta.orElse(oldEta)
-            Some((loc, eta))
+            Some((loc, eta, timestamp))
           }
         }
 
@@ -89,41 +73,60 @@ object StreamBin {
 
     val msgStream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topicsSet)
 
-    val normedStream = msgStream.map(pair => {
+    val wordsStream = msgStream.map(pair => {
       val (_, str) = pair
-      val json: JsValue = Json.parse(str)
+      str.split(",")
+    })
 
-      val msgType = (json \ "_type").asOpt[String]
-      val rid = (json \ "rideId").asOpt[Long]
-      val eta = (json \ "waitTime").asOpt[Eta]
-      val xLoc = (json \ "location" \ "x").asOpt[Double]
-      val yLoc = (json \ "location" \ "y").asOpt[Double]
+    val normedStream = wordsStream.map[UserRecord](words => {
 
-      if (msgType.getOrElse("") == "TYPE1") {
-        val loc = Some(locationToBucket(xLoc.get, yLoc.get))
+//      val lineNumber = words(0)
+      val rideId = words(1).toLong
+      val timestamp = words(2)
+      val longitude = words(3).toDouble
+      val latitude = words(4).toDouble
+      val waitTime = words(5).toInt
+      val msgType = words(6)
 
-        (rid.get, (loc, None))
+      val locBucket = locationToBucket(longitude.toDouble, latitude.toDouble)
+
+      val timestampDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(timestamp)
+      val timeBucket = timeToBucket(timestampDate)
+
+      val ts = timestampDate.getTime.toString
+
+      if (msgType.contains("REQ")) {
+        (rideId, (locBucket, None, ts))
       }
 
-      else if (msgType.getOrElse("") == "TYPE2") {
-        (rid.get, (None, eta))
+      else if (msgType.contains("ETA")) {
+        (rideId, (None, Some(waitTime.toDouble), ts))
       }
+
+//      else if (msgType.contains("PKP")) {
+//        (Some(rideId), (None, None, ts))
+//      }
 
       else {
-        throw new RuntimeException()
+        (rideId, (None, None, ts))
+//        (None, (None, None, ts))
       }
     })
+//      .filter(blah => {
+//      val (a: Option[Uid], (b, c, d)) = blah
+//      a.isDefined
+//    })
 
     val rideTableStream = normedStream.updateStateByKey(rideTableUpdateFunction)
 
     val cleanRideTableStream = rideTableStream.filter(record => {
-      val (uid, (loc, eta)) = record
+      val (uid, (loc, eta, timestamp)) = record
       loc.isDefined && eta.isDefined
     })
 
-    val locTableStream = cleanRideTableStream.map[(Loc, Eta)](record => {
-      val (uid, (loc, eta)) = record
-      (loc.get, eta.get)
+    val locTableStream = cleanRideTableStream.map[(Loc, (Eta, String))](record => {
+      val (uid, (loc, eta, timestamp)) = record
+      (loc.get, (eta.get, timestamp))
     }).groupByKey()
 
 //    val avgStream = locTableStream.map[(Loc, Double)](pair => {
@@ -132,20 +135,26 @@ object StreamBin {
 //      (loc, avg)
 //    })
 
-    val percentileStream = locTableStream.map[(Loc, Double)](pair => {
-      val tDigest = new AVLTreeDigest(100)
+    val percentileStream = locTableStream.map[(Loc, (Double, Double, String))](pair => {
+      val (loc, stuffList) = pair
 
-      val (loc, etaList) = pair
+      val (etaList, timestampList) = stuffList.unzip
+
+      val avg = etaList.sum / etaList.size
+
+      val tDigest = new AVLTreeDigest(100)
       etaList.foreach(tDigest.add(_, 1))
       val q90 = tDigest.quantile(0.9)
 
-      (loc, q90)
+      (loc, (avg, q90, timestampList.head))
     })
 
     val outputStream = percentileStream.map(pair => {
-      val (k, v) = pair
-      ("loc_" + k + "_p90", v)
+      val (k, (avg, p90, timestamp)) = pair
+      ("stream", "" + k + "/" + avg.toInt + "/" + p90.toInt + "/" + timestamp)
     })
+
+//    outputStream.print()
 
     outputStream.foreachRDD(rdd => {
       rdd.foreachPartition(pairs => {
