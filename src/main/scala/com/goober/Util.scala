@@ -40,10 +40,10 @@ object Util {
   }
 
   def timeToBucket(time: Date): Option[Interval] = {
-    val secondsPeriod = 2
+    val secondsPeriod = 1
     val numBuckets = 86400 / secondsPeriod
 
-    val seconds = time.getSeconds + 60*(time.getMinutes + 24*time.getHours)
+    val seconds = time.getSeconds + 60*(time.getMinutes + 60*time.getHours)
 
     val out = seconds / secondsPeriod
 
