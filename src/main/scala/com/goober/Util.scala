@@ -35,7 +35,7 @@ object Util {
       val col = Math.floor(scaledLng * numBucketsX).toInt
       val row = Math.floor(scaledLat * numBucketsY).toInt
 
-      Some(col * numBucketsX + row)
+      Some(row * numBucketsY + col)
     }
   }
 
