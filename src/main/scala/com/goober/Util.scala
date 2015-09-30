@@ -16,8 +16,8 @@ object Util {
   type EtaList = Seq[Eta]
 
   def locationToBucket(lng: Double, lat: Double): Option[Loc] = {
-    val numBucketsX = 10
-    val numBucketsY = 10
+    val numBucketsX = 50
+    val numBucketsY = 50
 
     val minLng = -74.05
     val maxLng = -73.87
@@ -25,7 +25,7 @@ object Util {
     val maxLat = 40.89
 
     val scaledLng = (lng - minLng) / (maxLng - minLng)
-    val scaledLat = (lat - minLat) / (maxLat - minLat)
+    val scaledLat = (maxLat - lat) / (maxLat - minLat)
 
     if (scaledLng < 0 || scaledLng >= 1 || scaledLat < 0 || scaledLat >= 1) {
       None
