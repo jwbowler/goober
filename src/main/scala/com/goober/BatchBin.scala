@@ -2,17 +2,11 @@ package com.goober
 
 import java.text.SimpleDateFormat
 
-import akka.actor.ActorSystem
 import com.goober.Util._
 import com.redis.RedisClient
 import com.tdunning.math.stats.AVLTreeDigest
-import com.typesafe.config.ConfigFactory
-import org.apache.commons.math.util.MathUtils
-import org.apache.log4j.{Logger, Level}
-import org.apache.spark.sql.catalyst.expressions.{Row}
-import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.sql.SQLContext
-import scredis.{Redis, Client}
+import org.apache.log4j.{Level, Logger}
+import org.apache.spark.SparkContext
 
 object BatchBin {
 
