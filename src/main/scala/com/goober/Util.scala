@@ -15,9 +15,14 @@ object Util {
   type UidEtaPair = (Uid, Eta)
   type EtaList = Seq[Eta]
 
+  // create a 'mod' operator using scala's 'remainder' (%) operator
+  implicit class Mod(val num: Int) extends AnyVal {
+    def mod(divisor: Int) = ((num % divisor) + divisor) % divisor
+  }
+
   def locationToBucket(lng: Double, lat: Double): Option[Loc] = {
-    val numBucketsX = 50
-    val numBucketsY = 50
+    val numBucketsX = 20
+    val numBucketsY = 20
 
     val minLng = -74.05
     val maxLng = -73.87
@@ -39,19 +44,15 @@ object Util {
     }
   }
 
-  def timeToBucket(time: Date): Option[Interval] = {
-    val secondsPeriod = 1
-    val numBuckets = 86400 / secondsPeriod
+  val secondsPeriod = 60
+  val numTimeBuckets = 86400 / secondsPeriod
 
+  def timeToBucket(time: Date): Interval = {
     val seconds = time.getSeconds + 60*(time.getMinutes + 60*time.getHours)
-
     val out = seconds / secondsPeriod
+    assert(out >= 0 && out < numTimeBuckets)
 
-    if (out < 0 || out >= numBuckets) {
-      None
-    } else {
-      Some(out)
-    }
+    out
   }
 
 }
