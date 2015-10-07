@@ -1,19 +1,35 @@
 package com.goober
 
+import java.text.SimpleDateFormat
 import java.util.Date
 
 object Util {
 
+  type Uid = Long
   type Loc = Int
   type Interval = Int
   type Eta = Double
 
-  type Uid = Long
+  type MessageTuple1 = (MessageType.MessageType, Option[Loc], Option[Eta])
 
-  type LocEtaPair = (Option[Loc], Option[Eta], String)
-  type UserRecord = (Uid, LocEtaPair)
-  type UidEtaPair = (Uid, Eta)
-  type EtaList = Seq[Eta]
+  type LocEtaPair = (Option[Loc], Option[Eta])
+//  type UserRecord = (Uid, LocEtaPair)
+//  type UidEtaPair = (Uid, Eta)
+//  type EtaList = Seq[Eta]
+
+  val redisHost = "john-redis.2wlafm.ng.0001.usw2.cache.amazonaws.com"
+  val redisPort = 6379
+
+  object MessageType extends Enumeration {
+    type MessageType = Value
+    val REQUEST, ETA_UPDATE, PICKUP = Value
+
+    def fromMessageString(str: String) = str match {
+      case "REQ" => REQUEST
+      case "ETA" => ETA_UPDATE
+      case "PKP" => PICKUP
+    }
+  }
 
   // create a 'mod' operator using scala's 'remainder' (%) operator
   implicit class Mod(val num: Int) extends AnyVal {
@@ -47,8 +63,9 @@ object Util {
   val secondsPeriod = 60
   val numTimeBuckets = 86400 / secondsPeriod
 
-  def timeToBucket(time: Date): Interval = {
-    val seconds = time.getSeconds + 60*(time.getMinutes + 60*time.getHours)
+  def timestampToBucket(timestamp: String): Interval = {
+    val date = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(timestamp)
+    val seconds = date.getSeconds + 60*(date.getMinutes + 60*date.getHours)
     val out = seconds / secondsPeriod
     assert(out >= 0 && out < numTimeBuckets)
 
