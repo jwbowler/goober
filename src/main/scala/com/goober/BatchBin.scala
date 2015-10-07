@@ -37,12 +37,12 @@ object BatchBin {
 
     // Bucket messages by time interval and location, and pull out "wait time" as the important value.
     //
-    // Example: if Joe gets picked up at 00:43:30 in Neighborhood 17 after having waited for 5 minutes and 3 seconds,
+    // Example: if Joe gets picked up at 00:43:30 in Neighborhood 17 after having waited for 189 seconds,
     // and if we bucket by minute (numBuckets == 24*60), we output:
-    // (43, 17, 5)
+    // (43, 17, 189)
     //
     // If we bucketed by second (numBuckets == 24*60*60), we would output:
-    // (2610, 17, 303)
+    // (2610, 17, 189)
     val parsedMessages = pickupMessages.map(words => {
       val rideId = words(1).toLong
       val timestamp = words(2)
@@ -70,20 +70,23 @@ object BatchBin {
     // A single "pickup" message falls into a single time bucket. However, Joe might be waiting for a ride through
     // multiple consecutive time buckets, and we want to know his ETA in each.
     //
-    // Continuing the example from above, Joe's pickup message...
-    // (43, 17, 5)
+    // Continuing the example from above, (the bucket-by-minute case), Joe's pickup message...
+    // (43, 17, 189)
     // ...would get flatMapped to...
-    // (38, 17, 5),  (39, 17, 4),  (40, 17, 3),  (41, 17, 2),  (42, 17, 1)
+    // (40, 17, 180),  (41, 17, 120),  (42, 17, 60)
+    // The "189" is a total wait time, and the "180", "120", and "60" are ETA's at different instances in time.
     val splitEtas = filteredMessages.flatMap(tuple => {
       val (timeBucket, locBucket, waitTime) = tuple
 
-      for (eta: Int <- List.range(1, waitTime + 1)) yield {
+      for (bucketDelta: Int <- List.range(1, waitTime/secondsPeriod + 1)) yield {
+        val eta = bucketDelta * secondsPeriod
+
         // Keep all new time buckets in the [0, numTimeBuckets) range
-        val newTimeBucket: Int = (timeBucket - eta) mod numTimeBuckets
+        val newTimeBucket: Int = (timeBucket - bucketDelta) mod numTimeBuckets
 
         (newTimeBucket, locBucket, eta)
       }
-    });
+    })
 
     // Key messages by (location-bucket, time-bucket), and group-by-key the ETAs of all requested rides in that time
     // and location.
@@ -125,7 +128,7 @@ object BatchBin {
       val redisClient = new RedisClient(redisHost, redisPort)
       part.foreach(pair => {
         val (k, v) = pair
-        val redisKey = secondsPeriod + "-" + k
+        val redisKey = secondsPeriod + "b-" + k
         redisClient.hmset(redisKey, v)
       })
     })
