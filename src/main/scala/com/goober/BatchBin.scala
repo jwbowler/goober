@@ -52,9 +52,7 @@ object BatchBin {
       val msgType = words(6)
 
       val locBucket = locationToBucket(longitude.toDouble, latitude.toDouble)
-
-      val timestampDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(timestamp)
-      val timeBucket = timeToBucket(timestampDate)
+      val timeBucket = timestampToBucket(timestamp)
 
       (timeBucket, locBucket, waitTime)
     })
@@ -124,7 +122,7 @@ object BatchBin {
     // Load into Redis, where each key is a timeBucket, and each value is a hash map from locationBuckets to summary
     // statistics.
     groupedByLocation.foreachPartition(part => {
-      val redisClient = new RedisClient("john-redis.2wlafm.ng.0001.usw2.cache.amazonaws.com", 6379)
+      val redisClient = new RedisClient(redisHost, redisPort)
       part.foreach(pair => {
         val (k, v) = pair
         val redisKey = secondsPeriod + "-" + k
