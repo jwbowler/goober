@@ -67,5 +67,5 @@ project/plugins/project/
 # .scala_dependencies
 # .worksheet
 
-Log data for producer scripts
+# Log data for producer scripts
 *.csv
